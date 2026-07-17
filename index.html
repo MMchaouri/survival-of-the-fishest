@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Shark Tank NN</title>
+  <style>
+    body { margin: 0; background: #071e28; font-family: ui-monospace, monospace; color: #eaf3f2; }
+    .layout { display: flex; gap: 12px; padding: 12px; }
+    #tank { background: linear-gradient(180deg, #0d3b4a, #071e28); border-radius: 8px; }
+    #nnviz { background: #0a1a1f; border-radius: 8px; }
+    #hud { display: flex; gap: 16px; padding: 8px 12px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div id="hud"></div>
+  <div class="layout">
+    <canvas id="tank" width="1000" height="600"></canvas>
+    <canvas id="nnviz" width="360" height="600"></canvas>
+  </div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
