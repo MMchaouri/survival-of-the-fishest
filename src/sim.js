@@ -6,6 +6,8 @@ const SHARK_RADIUS = 20;
 const CONTACT_DISTANCE = FISH_RADIUS + SHARK_RADIUS;
 const FISH_SPEED = 60; // px/sec at full thrust
 const SHARK_SPEED = 70;
+const TURN_RATE = 1.5; // rad/sec at full turn output
+const FISH_WANDER_NOISE = 0.6; // rad/sec of random heading drift, so a fish with no directional signal (e.g. stage 1) wanders instead of tracing a fixed circle
 
 export function createFish(bounds, nn) {
   return {
@@ -45,10 +47,20 @@ function nearbyFishTo(fish, allFish, radius = 80) {
 }
 
 function bounceOffWalls(agent, bounds, radius) {
-  if (agent.x < radius) { agent.x = radius; agent.vx = Math.abs(agent.vx); }
-  if (agent.x > bounds.width - radius) { agent.x = bounds.width - radius; agent.vx = -Math.abs(agent.vx); }
-  if (agent.y < radius) { agent.y = radius; agent.vy = Math.abs(agent.vy); }
-  if (agent.y > bounds.height - radius) { agent.y = bounds.height - radius; agent.vy = -Math.abs(agent.vy); }
+  // Reflects the agent's heading (angle), not just its velocity — vx/vy are
+  // recomputed from angle every tick before this runs, so flipping only
+  // vx/vy here had no lasting effect and let agents pin against a wall
+  // indefinitely while their NN kept steering back into it.
+  let bounced = false;
+  if (agent.x < radius) { agent.x = radius; agent.angle = Math.PI - agent.angle; bounced = true; }
+  if (agent.x > bounds.width - radius) { agent.x = bounds.width - radius; agent.angle = Math.PI - agent.angle; bounced = true; }
+  if (agent.y < radius) { agent.y = radius; agent.angle = -agent.angle; bounced = true; }
+  if (agent.y > bounds.height - radius) { agent.y = bounds.height - radius; agent.angle = -agent.angle; bounced = true; }
+  if (bounced) {
+    const speed = Math.hypot(agent.vx, agent.vy);
+    agent.vx = Math.cos(agent.angle) * speed;
+    agent.vy = Math.sin(agent.angle) * speed;
+  }
 }
 
 export function stepEpisode(state, dt, stageId) {
@@ -62,7 +74,7 @@ export function stepEpisode(state, dt, stageId) {
     f.lastInputs = inputs;
     const { output } = forward(f.nn, inputs);
     const [turn, thrust] = output;
-    f.angle += turn * 0.15;
+    f.angle += turn * TURN_RATE * dt + (Math.random() - 0.5) * FISH_WANDER_NOISE * dt;
     const speed = Math.max(0, thrust) * FISH_SPEED;
     f.vx = Math.cos(f.angle) * speed;
     f.vy = Math.sin(f.angle) * speed;
@@ -91,7 +103,7 @@ export function stepEpisode(state, dt, stageId) {
     const seekTurn = Math.max(-1, Math.min(1, angleDiff));
     const turn = 0.5 * nnTurn + 0.5 * seekTurn;
 
-    shark.angle += turn * 0.15;
+    shark.angle += turn * TURN_RATE * dt;
     const speed = Math.max(0, thrust) * SHARK_SPEED;
     shark.vx = Math.cos(shark.angle) * speed;
     shark.vy = Math.sin(shark.angle) * speed;

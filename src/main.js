@@ -29,7 +29,6 @@ const app = {
   generation: 0,
   running: true,
   speed: 1,
-  speedAccumulator: 0,
   elapsed: 0,
   fishGenomes: [],
   sharkGenomes: [],
@@ -132,22 +131,28 @@ function bestFitness() {
   return Math.max(...app.state.fish.map(f => f.fitness), 0);
 }
 
-function tick(dtMs) {
-  const t = dtMs / 1000;
-  const dt = 0.1;
+let lastTimestampMs = null;
+
+function tick(timestampMs) {
+  if (lastTimestampMs === null) lastTimestampMs = timestampMs;
+  // Clamp so a backgrounded tab (or a slow frame) can't dump a huge sim-time
+  // jump into one step; caps the physics step to 100ms of real time.
+  const realDt = Math.min((timestampMs - lastTimestampMs) / 1000, 0.1);
+  lastTimestampMs = timestampMs;
+
+  const t = timestampMs / 1000;
   const stage = currentStage();
 
   if (app.running) {
-    app.speedAccumulator += app.speed;
-    while (app.speedAccumulator >= 1) {
-      stepEpisode(app.state, dt, stage.id);
-      app.elapsed += dt;
-      app.speedAccumulator -= 1;
-      if (isEpisodeOver(app.state, app.elapsed, MAX_EPISODE_DURATION)) {
-        endEpisodeAndEvolve();
-        app.speedAccumulator = 0;
-        break;
-      }
+    // dt is scaled by the speed multiplier directly, so 1x tracks real time
+    // (a ~20s episode takes ~20 real seconds), 0.25x/0.5x run in slow motion,
+    // and 4x/20x fast-forward — instead of the old fixed-dt, fixed-step-count
+    // scheme where every speed ran episodes several times faster than real time.
+    const dt = realDt * app.speed;
+    stepEpisode(app.state, dt, stage.id);
+    app.elapsed += dt;
+    if (isEpisodeOver(app.state, app.elapsed, MAX_EPISODE_DURATION)) {
+      endEpisodeAndEvolve();
     }
   }
 
@@ -188,7 +193,7 @@ function tick(dtMs) {
 attachControls(controlsEl, {
   onPrevStage: previousStage,
   onNextStage: advanceStage,
-  onSpeedChange: speed => { app.speed = speed; app.speedAccumulator = 0; },
+  onSpeedChange: speed => { app.speed = speed; },
   onTogglePause: () => { app.running = !app.running; },
 });
 
