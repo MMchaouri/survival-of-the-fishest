@@ -14,6 +14,7 @@ const ELITE_COUNT_FISH = 3;
 const ELITE_COUNT_SHARK = 1;
 const MUTATION_RATE = 0.1;
 const MUTATION_SIGMA = 0.3;
+const BASE_TIME_SCALE = 2; // doubles every speed option's real pace, since 1x felt too slow
 
 const tankCanvas = document.getElementById('tank');
 const tankCtx = tankCanvas.getContext('2d');
@@ -29,10 +30,15 @@ const app = {
   generation: 0,
   running: true,
   speed: 1,
+  fishSpeed: 60,
+  sharkSpeed: 70,
+  untilAllDead: false,
   elapsed: 0,
   fishGenomes: [],
   sharkGenomes: [],
   sharkFitnesses: [],
+  allTimeBestFitness: 0,
+  lastGenBestFitness: 0,
   state: null,
   selectedAgent: null,
 };
@@ -55,6 +61,8 @@ function initGenomes() {
   app.fishGenomes = Array.from({ length: FISH_POP_SIZE }, () => makeFishNN(stage));
   app.sharkGenomes = Array.from({ length: SHARK_POP_SIZE }, () => makeSharkNN(stage.id));
   app.sharkFitnesses = new Array(app.sharkGenomes.length).fill(0);
+  app.allTimeBestFitness = 0;
+  app.lastGenBestFitness = 0;
 }
 
 function startEpisode() {
@@ -73,6 +81,10 @@ function startEpisode() {
 function endEpisodeAndEvolve() {
   const fishFitnesses = app.state.fish.map(f => f.fitness);
   const sharkFitness = app.state.shark.fitness;
+
+  const genBest = Math.max(...fishFitnesses, 0);
+  app.lastGenBestFitness = genBest;
+  app.allTimeBestFitness = Math.max(app.allTimeBestFitness, genBest);
 
   app.fishGenomes = evolvePopulation(app.fishGenomes, fishFitnesses, {
     eliteCount: ELITE_COUNT_FISH,
@@ -114,6 +126,8 @@ function goToStage(newIndex) {
   app.sharkGenomes = app.sharkGenomes.map(nn => resizeInputLayer(nn, stage.id === 6 ? 4 : 2));
   app.sharkFitnesses = new Array(app.sharkGenomes.length).fill(0);
   app.generation = 0;
+  app.allTimeBestFitness = 0;
+  app.lastGenBestFitness = 0;
   startEpisode();
 }
 
@@ -144,14 +158,14 @@ function tick(timestampMs) {
   const stage = currentStage();
 
   if (app.running) {
-    // dt is scaled by the speed multiplier directly, so 1x tracks real time
-    // (a ~20s episode takes ~20 real seconds), 0.25x/0.5x run in slow motion,
-    // and 4x/20x fast-forward — instead of the old fixed-dt, fixed-step-count
-    // scheme where every speed ran episodes several times faster than real time.
-    const dt = realDt * app.speed;
-    stepEpisode(app.state, dt, stage.id);
+    // dt is scaled by the speed multiplier (and a base time scale, since 1x
+    // alone felt too slow) so 1x tracks a brisk real pace, 0.25x/0.5x run in
+    // slow motion, and 4x/20x fast-forward.
+    const dt = realDt * app.speed * BASE_TIME_SCALE;
+    stepEpisode(app.state, dt, stage.id, { fishSpeed: app.fishSpeed, sharkSpeed: app.sharkSpeed });
     app.elapsed += dt;
-    if (isEpisodeOver(app.state, app.elapsed, MAX_EPISODE_DURATION)) {
+    const maxDuration = app.untilAllDead ? Infinity : MAX_EPISODE_DURATION;
+    if (isEpisodeOver(app.state, app.elapsed, maxDuration)) {
       endEpisodeAndEvolve();
     }
   }
@@ -183,8 +197,11 @@ function tick(timestampMs) {
     generation: app.generation,
     aliveCount: app.state.fish.filter(f => f.alive).length,
     bestFitness: bestFitness(),
+    lastGenBestFitness: app.lastGenBestFitness,
+    allTimeBestFitness: app.allTimeBestFitness,
     running: app.running,
     speed: app.speed,
+    untilAllDead: app.untilAllDead,
   });
 
   requestAnimationFrame(tick);
@@ -195,6 +212,12 @@ attachControls(controlsEl, {
   onNextStage: advanceStage,
   onSpeedChange: speed => { app.speed = speed; },
   onTogglePause: () => { app.running = !app.running; },
+  onFishSpeedChange: speed => { app.fishSpeed = speed; },
+  onSharkSpeedChange: speed => { app.sharkSpeed = speed; },
+  onToggleEndlessMode: () => {
+    app.untilAllDead = !app.untilAllDead;
+    return app.untilAllDead;
+  },
 });
 
 tankCanvas.addEventListener('click', e => {

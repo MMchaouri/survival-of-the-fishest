@@ -77,7 +77,9 @@ function clampPosition(agent, bounds, radius) {
   agent.y = Math.min(Math.max(agent.y, radius), bounds.height - radius);
 }
 
-export function stepEpisode(state, dt, stageId) {
+export function stepEpisode(state, dt, stageId, speedConfig = {}) {
+  const fishSpeed = speedConfig.fishSpeed ?? FISH_SPEED;
+  const sharkSpeed = speedConfig.sharkSpeed ?? SHARK_SPEED;
   const { fish, shark, bounds } = state;
 
   const distanceToSharkBefore = fish.map(f => Math.hypot(f.x - shark.x, f.y - shark.y));
@@ -91,7 +93,7 @@ export function stepEpisode(state, dt, stageId) {
     const wallTurn = wallAvoidanceTurn(f, bounds, WALL_MARGIN);
     const turn = nnTurn + wallTurn;
     f.angle += turn * TURN_RATE * dt + (Math.random() - 0.5) * FISH_WANDER_NOISE * dt;
-    const speed = Math.max(FISH_MIN_THRUST, thrust) * FISH_SPEED;
+    const speed = Math.max(FISH_MIN_THRUST, thrust) * fishSpeed;
     f.vx = Math.cos(f.angle) * speed;
     f.vy = Math.sin(f.angle) * speed;
     f.x += f.vx * dt;
@@ -121,7 +123,7 @@ export function stepEpisode(state, dt, stageId) {
     const turn = 0.5 * nnTurn + 0.5 * seekTurn + wallTurn;
 
     shark.angle += turn * TURN_RATE * dt;
-    const speed = Math.max(SHARK_MIN_THRUST, thrust) * SHARK_SPEED;
+    const speed = Math.max(SHARK_MIN_THRUST, thrust) * sharkSpeed;
     shark.vx = Math.cos(shark.angle) * speed;
     shark.vy = Math.sin(shark.angle) * speed;
     shark.x += shark.vx * dt;

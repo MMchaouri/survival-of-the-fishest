@@ -6,9 +6,12 @@ export function renderHUD(el, state) {
     `Stage ${state.stageId}: ${state.stageName}`,
     `Gen ${state.generation}`,
     `Alive ${state.aliveCount}`,
-    `Best ${state.bestFitness.toFixed(1)}`,
+    `Best (this gen) ${state.bestFitness.toFixed(1)}`,
+    `Last gen best ${state.lastGenBestFitness.toFixed(1)}`,
+    `All-time best ${state.allTimeBestFitness.toFixed(1)}`,
     state.running ? 'Running' : 'Paused',
     `${state.speed}x`,
+    state.untilAllDead ? 'Mode: until all dead' : 'Mode: timed episodes',
   ];
   for (const text of fields) {
     const span = document.createElement('span');
@@ -44,6 +47,45 @@ export function attachControls(el, handlers) {
   }
   speedSelect.addEventListener('change', () => handlers.onSpeedChange(Number(speedSelect.value)));
 
-  controls.append(prevStageBtn, nextStageBtn, pauseBtn, speedSelect);
+  const endlessModeBtn = document.createElement('button');
+  endlessModeBtn.textContent = 'Mode: Timed';
+  endlessModeBtn.addEventListener('click', () => {
+    const enabled = handlers.onToggleEndlessMode();
+    endlessModeBtn.textContent = enabled ? 'Mode: Until All Dead' : 'Mode: Timed';
+  });
+
+  const fishSpeedLabel = document.createElement('span');
+  fishSpeedLabel.textContent = 'Fish speed';
+  const fishSpeedSlider = document.createElement('input');
+  fishSpeedSlider.type = 'range';
+  fishSpeedSlider.min = '10';
+  fishSpeedSlider.max = '150';
+  fishSpeedSlider.value = '60';
+  const fishSpeedValue = document.createElement('span');
+  fishSpeedValue.textContent = fishSpeedSlider.value;
+  fishSpeedSlider.addEventListener('input', () => {
+    fishSpeedValue.textContent = fishSpeedSlider.value;
+    handlers.onFishSpeedChange(Number(fishSpeedSlider.value));
+  });
+
+  const sharkSpeedLabel = document.createElement('span');
+  sharkSpeedLabel.textContent = 'Shark speed';
+  const sharkSpeedSlider = document.createElement('input');
+  sharkSpeedSlider.type = 'range';
+  sharkSpeedSlider.min = '10';
+  sharkSpeedSlider.max = '150';
+  sharkSpeedSlider.value = '70';
+  const sharkSpeedValue = document.createElement('span');
+  sharkSpeedValue.textContent = sharkSpeedSlider.value;
+  sharkSpeedSlider.addEventListener('input', () => {
+    sharkSpeedValue.textContent = sharkSpeedSlider.value;
+    handlers.onSharkSpeedChange(Number(sharkSpeedSlider.value));
+  });
+
+  controls.append(
+    prevStageBtn, nextStageBtn, pauseBtn, speedSelect, endlessModeBtn,
+    fishSpeedLabel, fishSpeedSlider, fishSpeedValue,
+    sharkSpeedLabel, sharkSpeedSlider, sharkSpeedValue,
+  );
   el.appendChild(controls);
 }

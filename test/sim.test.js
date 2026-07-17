@@ -87,6 +87,23 @@ test('stepEpisode steers shark toward nearest fish even with a zero-weight NN', 
   assert.ok(newDiff < initialDiff, 'shark heading should turn closer to the nearest fish');
 });
 
+test('stepEpisode honors custom fishSpeed/sharkSpeed overrides', () => {
+  const fish = createFish(bounds, createNN([0, 8, 2]));
+  fish.x = 100;
+  fish.y = 100;
+  const shark = createShark(bounds, createNN([2, 8, 2]));
+  shark.x = 150;
+  shark.y = 150;
+  const state = { fish: [fish], shark, bounds };
+
+  stepEpisode(state, 0.1, 1, { fishSpeed: 0, sharkSpeed: 0 });
+
+  assert.equal(fish.x, 100, 'fishSpeed: 0 should stop the fish from moving regardless of NN output');
+  assert.equal(fish.y, 100);
+  assert.equal(shark.x, 150, 'sharkSpeed: 0 should stop the shark from moving regardless of NN output');
+  assert.equal(shark.y, 150);
+});
+
 test('isEpisodeOver is true once max duration elapsed', () => {
   const state = { fish: [{ alive: true }], shark: {}, bounds };
   assert.equal(isEpisodeOver(state, 20, 20), true);
