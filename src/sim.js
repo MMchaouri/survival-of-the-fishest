@@ -8,6 +8,9 @@ const FISH_SPEED = 60; // px/sec at full thrust
 const SHARK_SPEED = 70;
 const TURN_RATE = 1.5; // rad/sec at full turn output
 const FISH_WANDER_NOISE = 0.6; // rad/sec of random heading drift, so a fish with no directional signal (e.g. stage 1) wanders instead of tracing a fixed circle
+const FISH_MIN_THRUST = 0.2; // floor on forward speed so a near-zero NN thrust output doesn't read as "frozen, just spinning"
+const SHARK_MIN_THRUST = 0.3;
+const WALL_MARGIN = 60; // px from a wall where steer-away kicks in, well before the hard position clamp
 
 export function createFish(bounds, nn) {
   return {
@@ -46,21 +49,32 @@ function nearbyFishTo(fish, allFish, radius = 80) {
   return allFish.filter(f => f !== fish && f.alive && Math.hypot(f.x - fish.x, f.y - fish.y) <= radius);
 }
 
-function bounceOffWalls(agent, bounds, radius) {
-  // Reflects the agent's heading (angle), not just its velocity — vx/vy are
-  // recomputed from angle every tick before this runs, so flipping only
-  // vx/vy here had no lasting effect and let agents pin against a wall
-  // indefinitely while their NN kept steering back into it.
-  let bounced = false;
-  if (agent.x < radius) { agent.x = radius; agent.angle = Math.PI - agent.angle; bounced = true; }
-  if (agent.x > bounds.width - radius) { agent.x = bounds.width - radius; agent.angle = Math.PI - agent.angle; bounced = true; }
-  if (agent.y < radius) { agent.y = radius; agent.angle = -agent.angle; bounced = true; }
-  if (agent.y > bounds.height - radius) { agent.y = bounds.height - radius; agent.angle = -agent.angle; bounced = true; }
-  if (bounced) {
-    const speed = Math.hypot(agent.vx, agent.vy);
-    agent.vx = Math.cos(agent.angle) * speed;
-    agent.vy = Math.sin(agent.angle) * speed;
-  }
+// Returns a turn bias in [-1, 1] that steers the agent away from whichever
+// wall(s) it's within WALL_MARGIN of, growing stronger closer to the wall,
+// and 0 once it's clear. Used to turn away smoothly before ever reaching the
+// edge, instead of clamping and reversing on contact.
+function wallAvoidanceTurn(agent, bounds, margin) {
+  let biasX = 0;
+  let biasY = 0;
+  if (agent.x < margin) biasX += margin - agent.x;
+  if (agent.x > bounds.width - margin) biasX -= agent.x - (bounds.width - margin);
+  if (agent.y < margin) biasY += margin - agent.y;
+  if (agent.y > bounds.height - margin) biasY -= agent.y - (bounds.height - margin);
+  if (biasX === 0 && biasY === 0) return 0;
+
+  const desiredAngle = Math.atan2(biasY, biasX);
+  let diff = desiredAngle - agent.angle;
+  diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+  const strength = Math.min(1, Math.hypot(biasX, biasY) / margin);
+  return Math.max(-1, Math.min(1, diff)) * strength;
+}
+
+// Hard safety net only — clamps position inside bounds. Heading is turned
+// away from walls in advance by wallAvoidanceTurn, so this should rarely be
+// the thing that actually stops an agent.
+function clampPosition(agent, bounds, radius) {
+  agent.x = Math.min(Math.max(agent.x, radius), bounds.width - radius);
+  agent.y = Math.min(Math.max(agent.y, radius), bounds.height - radius);
 }
 
 export function stepEpisode(state, dt, stageId) {
@@ -73,14 +87,16 @@ export function stepEpisode(state, dt, stageId) {
     const inputs = buildFishInputs(stageId, f, bounds, shark, nearbyFishTo(f, fish));
     f.lastInputs = inputs;
     const { output } = forward(f.nn, inputs);
-    const [turn, thrust] = output;
+    const [nnTurn, thrust] = output;
+    const wallTurn = wallAvoidanceTurn(f, bounds, WALL_MARGIN);
+    const turn = nnTurn + wallTurn;
     f.angle += turn * TURN_RATE * dt + (Math.random() - 0.5) * FISH_WANDER_NOISE * dt;
-    const speed = Math.max(0, thrust) * FISH_SPEED;
+    const speed = Math.max(FISH_MIN_THRUST, thrust) * FISH_SPEED;
     f.vx = Math.cos(f.angle) * speed;
     f.vy = Math.sin(f.angle) * speed;
     f.x += f.vx * dt;
     f.y += f.vy * dt;
-    bounceOffWalls(f, bounds, FISH_RADIUS);
+    clampPosition(f, bounds, FISH_RADIUS);
 
     f.fitness += dt; // survival time
     f.fitness += Math.hypot(f.x - shark.x, f.y - shark.y) * 0.001; // distance-from-shark bonus
@@ -101,15 +117,16 @@ export function stepEpisode(state, dt, stageId) {
     let angleDiff = angleToNearest - shark.angle;
     angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
     const seekTurn = Math.max(-1, Math.min(1, angleDiff));
-    const turn = 0.5 * nnTurn + 0.5 * seekTurn;
+    const wallTurn = wallAvoidanceTurn(shark, bounds, WALL_MARGIN);
+    const turn = 0.5 * nnTurn + 0.5 * seekTurn + wallTurn;
 
     shark.angle += turn * TURN_RATE * dt;
-    const speed = Math.max(0, thrust) * SHARK_SPEED;
+    const speed = Math.max(SHARK_MIN_THRUST, thrust) * SHARK_SPEED;
     shark.vx = Math.cos(shark.angle) * speed;
     shark.vy = Math.sin(shark.angle) * speed;
     shark.x += shark.vx * dt;
     shark.y += shark.vy * dt;
-    bounceOffWalls(shark, bounds, SHARK_RADIUS);
+    clampPosition(shark, bounds, SHARK_RADIUS);
   }
 
   fish.forEach((f, i) => {
