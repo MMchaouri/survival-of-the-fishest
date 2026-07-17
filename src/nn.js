@@ -22,7 +22,7 @@ export function createNN(layerSizes) {
       layerWeights.push(row);
     }
     weights.push(layerWeights);
-    biases.push(new Array(fanOut).fill(0));
+    biases.push(Array.from({ length: fanOut }, () => (Math.random() * 2 - 1) * 0.5));
   }
   return { layerSizes: [...layerSizes], weights, biases };
 }

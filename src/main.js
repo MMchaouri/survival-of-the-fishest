@@ -32,6 +32,7 @@ const app = {
   elapsed: 0,
   fishGenomes: [],
   sharkGenomes: [],
+  sharkFitnesses: [],
   state: null,
   selectedAgent: null,
 };
@@ -53,6 +54,7 @@ function initGenomes() {
   const stage = currentStage();
   app.fishGenomes = Array.from({ length: FISH_POP_SIZE }, () => makeFishNN(stage));
   app.sharkGenomes = Array.from({ length: SHARK_POP_SIZE }, () => makeSharkNN(stage.id));
+  app.sharkFitnesses = new Array(app.sharkGenomes.length).fill(0);
 }
 
 function startEpisode() {
@@ -82,15 +84,19 @@ function endEpisodeAndEvolve() {
   });
 
   const sharkGenomeIndex = app.generation % app.sharkGenomes.length;
-  const sharkFitnesses = app.sharkGenomes.map((_, i) => (i === sharkGenomeIndex ? sharkFitness : 0));
-  app.sharkGenomes = evolvePopulation(app.sharkGenomes, sharkFitnesses, {
-    eliteCount: ELITE_COUNT_SHARK,
-    mutationRate: MUTATION_RATE,
-    mutationSigma: MUTATION_SIGMA,
-    cloneFn: cloneNN,
-    crossoverFn: crossoverNN,
-    mutateFn: mutateNN,
-  });
+  app.sharkFitnesses[sharkGenomeIndex] = sharkFitness;
+
+  if ((app.generation + 1) % app.sharkGenomes.length === 0) {
+    app.sharkGenomes = evolvePopulation(app.sharkGenomes, app.sharkFitnesses, {
+      eliteCount: ELITE_COUNT_SHARK,
+      mutationRate: MUTATION_RATE,
+      mutationSigma: MUTATION_SIGMA,
+      cloneFn: cloneNN,
+      crossoverFn: crossoverNN,
+      mutateFn: mutateNN,
+    });
+    app.sharkFitnesses = new Array(app.sharkGenomes.length).fill(0);
+  }
 
   app.generation++;
   startEpisode();
@@ -107,6 +113,7 @@ function advanceStage() {
       : createNN([stage.fishInputSize, ...stage.fishHiddenLayers, 2]);
   });
   app.sharkGenomes = app.sharkGenomes.map(nn => resizeInputLayer(nn, stage.id === 6 ? 4 : 2));
+  app.sharkFitnesses = new Array(app.sharkGenomes.length).fill(0);
   app.generation = 0;
   startEpisode();
 }
@@ -138,9 +145,11 @@ function tick(dtMs) {
     if (app.selectedAgent) {
       const stageForInputs = currentStage();
       const isShark = app.selectedAgent === app.state.shark;
-      const { activations } = isShark
-        ? forward(app.selectedAgent.nn, [0, 0, ...(stageForInputs.id === 6 ? [0, 0] : [])])
-        : forward(app.selectedAgent.nn, new Array(stageForInputs.fishInputSize).fill(0));
+      const fallbackInputs = isShark
+        ? new Array(stageForInputs.id === 6 ? 4 : 2).fill(0)
+        : new Array(stageForInputs.fishInputSize).fill(0);
+      const inputs = app.selectedAgent.lastInputs ?? fallbackInputs;
+      const { activations } = forward(app.selectedAgent.nn, inputs);
       drawNNDiagram(nnCtx, app.selectedAgent.nn, activations, { width: nnCanvas.width, height: nnCanvas.height });
     }
   }

@@ -59,6 +59,7 @@ export function stepEpisode(state, dt, stageId) {
   for (const f of fish) {
     if (!f.alive) continue;
     const inputs = buildFishInputs(stageId, f, bounds, shark, nearbyFishTo(f, fish));
+    f.lastInputs = inputs;
     const { output } = forward(f.nn, inputs);
     const [turn, thrust] = output;
     f.angle += turn * 0.15;
@@ -76,6 +77,7 @@ export function stepEpisode(state, dt, stageId) {
   const nearest = nearestFishTo(shark, fish);
   if (nearest) {
     const inputs = buildSharkInputs(stageId, shark, nearest);
+    shark.lastInputs = inputs;
     const { output } = forward(shark.nn, inputs);
     const [turn, thrust] = output;
     shark.angle += turn * 0.15;
