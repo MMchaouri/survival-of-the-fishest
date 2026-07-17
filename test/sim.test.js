@@ -60,6 +60,33 @@ test('stepEpisode accumulates fish fitness for survival while alive', () => {
   assert.ok(fish.fitness > 0);
 });
 
+test('stepEpisode steers shark toward nearest fish even with a zero-weight NN', () => {
+  // Zero weights/biases -> NN output is always [0, 0] (no turn from the NN),
+  // isolating the baseline pursuit term: the shark's heading should still
+  // rotate toward the fish rather than stay frozen or drift arbitrarily.
+  const sharkNN = createNN([2, 8, 2]);
+  sharkNN.weights = sharkNN.weights.map(layer => layer.map(row => row.map(() => 0)));
+  const shark = createShark(bounds, sharkNN);
+  shark.x = 100;
+  shark.y = 100;
+  shark.angle = 0; // facing +x (away from the fish, which is above-left)
+
+  const fish = createFish(bounds, createNN([0, 8, 2]));
+  fish.x = 50;
+  fish.y = 50;
+  fish.vx = 0;
+  fish.vy = 0;
+
+  const state = { fish: [fish], shark, bounds };
+  const angleToFish = Math.atan2(fish.y - shark.y, fish.x - shark.x);
+  const initialDiff = Math.abs(Math.atan2(Math.sin(angleToFish - shark.angle), Math.cos(angleToFish - shark.angle)));
+
+  stepEpisode(state, 0.1, 1);
+
+  const newDiff = Math.abs(Math.atan2(Math.sin(angleToFish - shark.angle), Math.cos(angleToFish - shark.angle)));
+  assert.ok(newDiff < initialDiff, 'shark heading should turn closer to the nearest fish');
+});
+
 test('isEpisodeOver is true once max duration elapsed', () => {
   const state = { fish: [{ alive: true }], shark: {}, bounds };
   assert.equal(isEpisodeOver(state, 20, 20), true);

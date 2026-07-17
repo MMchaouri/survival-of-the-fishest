@@ -22,6 +22,10 @@ export function attachControls(el, handlers) {
   controls.style.display = 'flex';
   controls.style.gap = '8px';
 
+  const prevStageBtn = document.createElement('button');
+  prevStageBtn.textContent = 'Previous Stage';
+  prevStageBtn.addEventListener('click', handlers.onPrevStage);
+
   const nextStageBtn = document.createElement('button');
   nextStageBtn.textContent = 'Next Stage';
   nextStageBtn.addEventListener('click', handlers.onNextStage);
@@ -31,14 +35,15 @@ export function attachControls(el, handlers) {
   pauseBtn.addEventListener('click', handlers.onTogglePause);
 
   const speedSelect = document.createElement('select');
-  for (const speed of [1, 4, 20]) {
+  for (const speed of [0.25, 0.5, 1, 4, 20]) {
     const option = document.createElement('option');
     option.value = String(speed);
     option.textContent = `${speed}x`;
+    if (speed === 1) option.selected = true;
     speedSelect.appendChild(option);
   }
   speedSelect.addEventListener('change', () => handlers.onSpeedChange(Number(speedSelect.value)));
 
-  controls.append(nextStageBtn, pauseBtn, speedSelect);
+  controls.append(prevStageBtn, nextStageBtn, pauseBtn, speedSelect);
   el.appendChild(controls);
 }

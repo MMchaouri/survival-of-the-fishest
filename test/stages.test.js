@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { STAGES, buildFishInputs, buildSharkInputs } from '../src/stages.js';
+import { STAGES, buildFishInputs, buildSharkInputs, fishInputLabels, sharkInputLabels } from '../src/stages.js';
 
 test('STAGES has exactly 6 stages with increasing fishInputSize', () => {
   assert.equal(STAGES.length, 6);
@@ -47,4 +47,18 @@ test('buildSharkInputs returns 2 inputs before stage 6, 4 at stage 6', () => {
     assert.equal(buildSharkInputs(id, shark, nearestFish).length, 2);
   }
   assert.equal(buildSharkInputs(6, shark, nearestFish).length, 4);
+});
+
+test('fishInputLabels length matches fishInputSize at every stage', () => {
+  for (const stage of STAGES) {
+    assert.equal(fishInputLabels(stage.id).length, stage.fishInputSize, `stage ${stage.id} label count mismatch`);
+  }
+});
+
+test('sharkInputLabels length matches buildSharkInputs length at every stage', () => {
+  const shark = { x: 0, y: 0, vx: 0, vy: 0 };
+  const nearestFish = { x: 10, y: 10, vx: 1, vy: -1 };
+  for (const stage of STAGES) {
+    assert.equal(sharkInputLabels(stage.id).length, buildSharkInputs(stage.id, shark, nearestFish).length);
+  }
 });

@@ -79,7 +79,18 @@ export function stepEpisode(state, dt, stageId) {
     const inputs = buildSharkInputs(stageId, shark, nearest);
     shark.lastInputs = inputs;
     const { output } = forward(shark.nn, inputs);
-    const [turn, thrust] = output;
+    const [nnTurn, thrust] = output;
+
+    // Baseline pursuit: blend the evolved NN's turn with a direct bearing to
+    // the nearest fish, so an untrained/undertrained shark still hunts
+    // instead of carving a constant-curvature circle from a near-constant
+    // NN output.
+    const angleToNearest = Math.atan2(nearest.y - shark.y, nearest.x - shark.x);
+    let angleDiff = angleToNearest - shark.angle;
+    angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+    const seekTurn = Math.max(-1, Math.min(1, angleDiff));
+    const turn = 0.5 * nnTurn + 0.5 * seekTurn;
+
     shark.angle += turn * 0.15;
     const speed = Math.max(0, thrust) * SHARK_SPEED;
     shark.vx = Math.cos(shark.angle) * speed;

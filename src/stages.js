@@ -62,3 +62,26 @@ export function buildSharkInputs(stageId, shark, nearestFish) {
   }
   return inputs;
 }
+
+export function fishInputLabels(stageId) {
+  const labels = [];
+  if (stageId === 1) return labels;
+  labels.push('wallL', 'wallR', 'wallT', 'wallB');
+  if (stageId === 2) return labels;
+  labels.push('sharkDist');
+  if (stageId === 3) return labels;
+  labels.push('sharkAngle');
+  if (stageId === 4) return labels;
+  labels.push('nbrDX', 'nbrDY');
+  if (stageId === 5) return labels;
+  labels.push('sharkVX', 'sharkVY');
+  return labels;
+}
+
+export function sharkInputLabels(stageId) {
+  const labels = ['preyDist', 'preyAngle'];
+  if (stageId === 6) labels.push('preyVX', 'preyVY');
+  return labels;
+}
+
+export const OUTPUT_LABELS = ['turn', 'thrust'];

@@ -1,6 +1,6 @@
 // src/nnviz.js
 
-export function drawNNDiagram(ctx, nn, activations, bounds) {
+export function drawNNDiagram(ctx, nn, activations, bounds, labels = {}) {
   ctx.clearRect(0, 0, bounds.width, bounds.height);
   const layers = activations.length;
   const layerGap = bounds.width / (layers + 1);
@@ -37,4 +37,25 @@ export function drawNNDiagram(ctx, nn, activations, bounds) {
       ctx.fill();
     });
   });
+
+  ctx.font = '10px ui-monospace, monospace';
+
+  const inputLabels = labels.inputLabels ?? [];
+  ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(230, 240, 240, 0.85)';
+  positions[0]?.forEach((pos, n) => {
+    const text = inputLabels[n];
+    if (text) ctx.fillText(text, pos.x - 10, pos.y + 3);
+  });
+
+  const outputLabels = labels.outputLabels ?? [];
+  const lastLayer = positions[positions.length - 1];
+  ctx.textAlign = 'left';
+  lastLayer.forEach((pos, n) => {
+    const text = outputLabels[n];
+    if (text) ctx.fillText(text, pos.x + 10, pos.y + 3);
+  });
+
+  ctx.fillStyle = 'rgba(200, 220, 220, 0.6)';
+  ctx.fillText('green = excite, red = inhibit', 6, bounds.height - 8);
 }

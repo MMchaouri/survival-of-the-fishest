@@ -1,7 +1,7 @@
 // src/main.js
 import { createNN, resizeInputLayer, mutateNN, crossoverNN, cloneNN, forward } from './nn.js';
 import { evolvePopulation } from './genetic.js';
-import { STAGES } from './stages.js';
+import { STAGES, fishInputLabels, sharkInputLabels, OUTPUT_LABELS } from './stages.js';
 import { createFish, createShark, stepEpisode, isEpisodeOver, getStageById } from './sim.js';
 import { drawTankBackground, drawFish, drawShark } from './render.js';
 import { drawNNDiagram } from './nnviz.js';
@@ -29,6 +29,7 @@ const app = {
   generation: 0,
   running: true,
   speed: 1,
+  speedAccumulator: 0,
   elapsed: 0,
   fishGenomes: [],
   sharkGenomes: [],
@@ -102,9 +103,8 @@ function endEpisodeAndEvolve() {
   startEpisode();
 }
 
-function advanceStage() {
-  if (app.stageIndex >= STAGES.length - 1) return;
-  app.stageIndex++;
+function goToStage(newIndex) {
+  app.stageIndex = newIndex;
   const stage = currentStage();
   app.fishGenomes = app.fishGenomes.map(nn => {
     const resized = resizeInputLayer(nn, stage.fishInputSize);
@@ -118,6 +118,16 @@ function advanceStage() {
   startEpisode();
 }
 
+function advanceStage() {
+  if (app.stageIndex >= STAGES.length - 1) return;
+  goToStage(app.stageIndex + 1);
+}
+
+function previousStage() {
+  if (app.stageIndex <= 0) return;
+  goToStage(app.stageIndex - 1);
+}
+
 function bestFitness() {
   return Math.max(...app.state.fish.map(f => f.fitness), 0);
 }
@@ -127,13 +137,17 @@ function tick(dtMs) {
   const dt = 0.1;
   const stage = currentStage();
 
-  for (let i = 0; i < app.speed; i++) {
-    if (!app.running) break;
-    stepEpisode(app.state, dt, stage.id);
-    app.elapsed += dt;
-    if (isEpisodeOver(app.state, app.elapsed, MAX_EPISODE_DURATION)) {
-      endEpisodeAndEvolve();
-      break;
+  if (app.running) {
+    app.speedAccumulator += app.speed;
+    while (app.speedAccumulator >= 1) {
+      stepEpisode(app.state, dt, stage.id);
+      app.elapsed += dt;
+      app.speedAccumulator -= 1;
+      if (isEpisodeOver(app.state, app.elapsed, MAX_EPISODE_DURATION)) {
+        endEpisodeAndEvolve();
+        app.speedAccumulator = 0;
+        break;
+      }
     }
   }
 
@@ -150,7 +164,11 @@ function tick(dtMs) {
         : new Array(stageForInputs.fishInputSize).fill(0);
       const inputs = app.selectedAgent.lastInputs ?? fallbackInputs;
       const { activations } = forward(app.selectedAgent.nn, inputs);
-      drawNNDiagram(nnCtx, app.selectedAgent.nn, activations, { width: nnCanvas.width, height: nnCanvas.height });
+      const nnLabels = {
+        inputLabels: isShark ? sharkInputLabels(stageForInputs.id) : fishInputLabels(stageForInputs.id),
+        outputLabels: OUTPUT_LABELS,
+      };
+      drawNNDiagram(nnCtx, app.selectedAgent.nn, activations, { width: nnCanvas.width, height: nnCanvas.height }, nnLabels);
     }
   }
 
@@ -168,8 +186,9 @@ function tick(dtMs) {
 }
 
 attachControls(controlsEl, {
+  onPrevStage: previousStage,
   onNextStage: advanceStage,
-  onSpeedChange: speed => { app.speed = speed; },
+  onSpeedChange: speed => { app.speed = speed; app.speedAccumulator = 0; },
   onTogglePause: () => { app.running = !app.running; },
 });
 
