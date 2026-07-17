@@ -108,7 +108,14 @@ export function stepEpisode(state, dt, stageId, speedConfig = {}) {
       turn = 0.6 * turn + 0.4 * fleeTurn;
     }
 
-    f.angle += turn * TURN_RATE * dt + (Math.random() - 0.5) * FISH_WANDER_NOISE * dt;
+    // Wander noise is scoped to stage 1 only: it exists purely to break the
+    // frozen-circle problem when a fish has zero directional signal to act
+    // on. Past stage 1 the fish has walls/shark/flee signal to commit to,
+    // and applying the same noise there just made every fish zigzag
+    // constantly, quietly erasing a chunk of any real speed advantage over
+    // the shark (which gets no such noise).
+    const wanderNoise = stageId === 1 ? (Math.random() - 0.5) * FISH_WANDER_NOISE * dt : 0;
+    f.angle += turn * TURN_RATE * dt + wanderNoise;
     const speed = Math.max(FISH_MIN_THRUST, thrust) * fishSpeed;
     f.vx = Math.cos(f.angle) * speed;
     f.vy = Math.sin(f.angle) * speed;

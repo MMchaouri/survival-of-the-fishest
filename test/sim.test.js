@@ -132,6 +132,28 @@ test('stepEpisode does not add a flee bias at stage 1 (no shark awareness yet)',
   assert.ok(Math.abs(fish.angle) < 0.05, 'stage 1 should not add a flee-toward-away-from-shark bias');
 });
 
+test('stepEpisode applies no wander noise from stage 2 onward', () => {
+  const fishNN = createNN([4, 8, 2]); // stage 2 input size
+  fishNN.weights = fishNN.weights.map(layer => layer.map(row => row.map(() => 0)));
+  fishNN.biases = fishNN.biases.map(layer => layer.map(() => 0));
+  const fish = createFish(bounds, fishNN);
+  fish.x = 100;
+  fish.y = 100;
+  fish.angle = 0;
+
+  const shark = createShark(bounds, createNN([2, 8, 2]));
+  shark.x = 190; // far away, so wall-avoid/flee terms stay at 0 too
+  shark.y = 190;
+
+  const state = { fish: [fish], shark, bounds };
+  stepEpisode(state, 0.1, 2);
+
+  // With zero NN output, no wall proximity, and no flee bias at stage 2
+  // (flee only kicks in from stage 3), heading should not move at all -
+  // any nonzero drift here would mean wander noise leaked past stage 1.
+  assert.equal(fish.angle, 0, 'stage 2+ should not apply the stage-1-only wander noise');
+});
+
 test('stepEpisode honors custom fishSpeed/sharkSpeed overrides', () => {
   const fish = createFish(bounds, createNN([0, 8, 2]));
   fish.x = 100;
