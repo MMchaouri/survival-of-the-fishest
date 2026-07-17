@@ -39,6 +39,10 @@ export function renderStageExplainer(el, stage, newInputLabels) {
   }
 }
 
+export function renderNarrator(el, text) {
+  el.textContent = text;
+}
+
 export function attachControls(el, handlers) {
   const controls = document.createElement('div');
   controls.style.display = 'flex';

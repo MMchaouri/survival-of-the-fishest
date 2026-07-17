@@ -6,11 +6,13 @@ import { createFish, createShark, stepEpisode, isEpisodeOver, getStageById } fro
 import { drawTankBackground, drawFish, drawShark } from './render.js';
 import { drawNNDiagram } from './nnviz.js';
 import { drawFitnessChart } from './chart.js';
-import { renderHUD, attachControls, renderStageExplainer } from './ui.js';
+import { buildGenerationCommentary } from './narrator.js';
+import { renderHUD, attachControls, renderStageExplainer, renderNarrator } from './ui.js';
 
 const FISH_POP_SIZE = 30;
 const SHARK_POP_SIZE = 8;
 const MAX_EPISODE_DURATION = 20;
+const ENDLESS_MODE_SAFETY_CAP = 120; // "until all dead" still forces a generation change eventually, in case fish get good enough to never die
 const ELITE_COUNT_FISH = 3;
 const ELITE_COUNT_SHARK = 1;
 const MUTATION_RATE = 0.1;
@@ -26,6 +28,7 @@ const chartCtx = chartCanvas.getContext('2d');
 const hudEl = document.getElementById('hud');
 const controlsEl = document.getElementById('controls');
 const stageInfoEl = document.getElementById('stageInfo');
+const narratorEl = document.getElementById('narrator');
 
 const bounds = { width: tankCanvas.width, height: tankCanvas.height };
 
@@ -106,12 +109,25 @@ function startEpisode() {
 function endEpisodeAndEvolve() {
   const fishFitnesses = app.state.fish.map(f => f.fitness);
   const sharkFitness = app.state.shark.fitness;
+  const survivorCount = app.state.fish.filter(f => f.alive).length;
 
   const genBest = Math.max(...fishFitnesses, 0);
   const genAvg = fishFitnesses.reduce((sum, f) => sum + f, 0) / fishFitnesses.length;
+  const previousAllTimeBest = app.allTimeBestFitness;
   app.lastGenBestFitness = genBest;
   app.allTimeBestFitness = Math.max(app.allTimeBestFitness, genBest);
   app.fitnessHistory.push({ gen: app.generation, best: genBest, avg: genAvg });
+
+  const commentary = buildGenerationCommentary({
+    generation: app.generation,
+    genBest,
+    genAvg,
+    previousAllTimeBest,
+    survivorCount,
+    populationSize: fishFitnesses.length,
+    stage: currentStage(),
+  });
+  renderNarrator(narratorEl, commentary);
 
   app.fishGenomes = evolvePopulation(app.fishGenomes, fishFitnesses, {
     eliteCount: ELITE_COUNT_FISH,
@@ -205,7 +221,7 @@ function tick(timestampMs) {
     const dt = realDt * app.speed * BASE_TIME_SCALE;
     stepEpisode(app.state, dt, stage.id, { fishSpeed: app.fishSpeed, sharkSpeed: app.sharkSpeed });
     app.elapsed += dt;
-    const maxDuration = app.untilAllDead ? Infinity : MAX_EPISODE_DURATION;
+    const maxDuration = app.untilAllDead ? ENDLESS_MODE_SAFETY_CAP : MAX_EPISODE_DURATION;
     if (isEpisodeOver(app.state, app.elapsed, maxDuration)) {
       endEpisodeAndEvolve();
     }
@@ -280,4 +296,5 @@ tankCanvas.addEventListener('click', e => {
 initGenomes();
 startEpisode();
 updateStageExplainer(null);
+renderNarrator(narratorEl, 'Generation 0 is running. Commentary appears once the first generation finishes and evolves.');
 requestAnimationFrame(tick);
