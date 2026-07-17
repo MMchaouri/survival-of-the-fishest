@@ -78,6 +78,21 @@ export function crossoverNN(a, b) {
   return child;
 }
 
+// Per-weight and per-bias difference between two networks of the same
+// shape (newNN minus oldNN). Used to show what evolution actually changed
+// from one generation's best genome to the next, since nothing here is
+// trained by backpropagation, only mutation and selection.
+export function diffNN(oldNN, newNN) {
+  return {
+    weights: newNN.weights.map((layer, l) =>
+      layer.map((row, n) => row.map((w, i) => w - oldNN.weights[l][n][i]))
+    ),
+    biases: newNN.biases.map((layer, l) =>
+      layer.map((b, n) => b - oldNN.biases[l][n])
+    ),
+  };
+}
+
 export function resizeInputLayer(nn, newInputSize) {
   const oldInputSize = nn.layerSizes[0];
   const firstLayerWeights = nn.weights[0].map(row => {

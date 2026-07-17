@@ -1,11 +1,12 @@
 // src/main.js
-import { createNN, resizeInputLayer, mutateNN, crossoverNN, cloneNN, forward } from './nn.js';
+import { createNN, resizeInputLayer, mutateNN, crossoverNN, cloneNN, forward, diffNN } from './nn.js';
 import { evolvePopulation } from './genetic.js';
 import { STAGES, fishInputLabels, sharkInputLabels, OUTPUT_LABELS } from './stages.js';
 import { createFish, createShark, stepEpisode, isEpisodeOver, getStageById } from './sim.js';
 import { drawTankBackground, drawFish, drawShark } from './render.js';
 import { drawNNDiagram } from './nnviz.js';
-import { renderHUD, attachControls } from './ui.js';
+import { drawFitnessChart } from './chart.js';
+import { renderHUD, attachControls, renderStageExplainer } from './ui.js';
 
 const FISH_POP_SIZE = 30;
 const SHARK_POP_SIZE = 8;
@@ -20,8 +21,11 @@ const tankCanvas = document.getElementById('tank');
 const tankCtx = tankCanvas.getContext('2d');
 const nnCanvas = document.getElementById('nnviz');
 const nnCtx = nnCanvas.getContext('2d');
+const chartCanvas = document.getElementById('fitnessChart');
+const chartCtx = chartCanvas.getContext('2d');
 const hudEl = document.getElementById('hud');
 const controlsEl = document.getElementById('controls');
+const stageInfoEl = document.getElementById('stageInfo');
 
 const bounds = { width: tankCanvas.width, height: tankCanvas.height };
 
@@ -39,6 +43,10 @@ const app = {
   sharkFitnesses: [],
   allTimeBestFitness: 0,
   lastGenBestFitness: 0,
+  fitnessHistory: [],
+  prevSelectedSnapshotNN: null,
+  weightDiff: null,
+  weightDiffTarget: null,
   state: null,
   selectedAgent: null,
 };
@@ -63,6 +71,10 @@ function initGenomes() {
   app.sharkFitnesses = new Array(app.sharkGenomes.length).fill(0);
   app.allTimeBestFitness = 0;
   app.lastGenBestFitness = 0;
+  app.fitnessHistory = [];
+  app.prevSelectedSnapshotNN = null;
+  app.weightDiff = null;
+  app.weightDiffTarget = null;
 }
 
 function startEpisode() {
@@ -76,6 +88,19 @@ function startEpisode() {
   if (!app.stage6VelocityWired && stage.id === 6) {
     app.stage6VelocityWired = true;
   }
+
+  // fish[0] is the previous generation's elite (evolvePopulation always
+  // places elites first), so as long as the architecture hasn't changed
+  // (no stage transition), diffing it against the last snapshot shows what
+  // evolution actually changed to produce this generation's best genome.
+  const newNN = app.selectedAgent.nn;
+  if (app.prevSelectedSnapshotNN && app.prevSelectedSnapshotNN.layerSizes.join(',') === newNN.layerSizes.join(',')) {
+    app.weightDiff = diffNN(app.prevSelectedSnapshotNN, newNN);
+  } else {
+    app.weightDiff = null;
+  }
+  app.weightDiffTarget = app.selectedAgent;
+  app.prevSelectedSnapshotNN = cloneNN(newNN);
 }
 
 function endEpisodeAndEvolve() {
@@ -83,8 +108,10 @@ function endEpisodeAndEvolve() {
   const sharkFitness = app.state.shark.fitness;
 
   const genBest = Math.max(...fishFitnesses, 0);
+  const genAvg = fishFitnesses.reduce((sum, f) => sum + f, 0) / fishFitnesses.length;
   app.lastGenBestFitness = genBest;
   app.allTimeBestFitness = Math.max(app.allTimeBestFitness, genBest);
+  app.fitnessHistory.push({ gen: app.generation, best: genBest, avg: genAvg });
 
   app.fishGenomes = evolvePopulation(app.fishGenomes, fishFitnesses, {
     eliteCount: ELITE_COUNT_FISH,
@@ -115,6 +142,7 @@ function endEpisodeAndEvolve() {
 }
 
 function goToStage(newIndex) {
+  const previousStageId = currentStage().id;
   app.stageIndex = newIndex;
   const stage = currentStage();
   app.fishGenomes = app.fishGenomes.map(nn => {
@@ -128,7 +156,20 @@ function goToStage(newIndex) {
   app.generation = 0;
   app.allTimeBestFitness = 0;
   app.lastGenBestFitness = 0;
+  app.fitnessHistory = [];
+  app.prevSelectedSnapshotNN = null;
+  app.weightDiff = null;
+  app.weightDiffTarget = null;
   startEpisode();
+  updateStageExplainer(previousStageId);
+}
+
+function updateStageExplainer(previousStageId) {
+  const stage = currentStage();
+  const prevLabels = previousStageId !== null ? fishInputLabels(previousStageId) : [];
+  const currLabels = fishInputLabels(stage.id);
+  const added = currLabels.filter(label => !prevLabels.includes(label));
+  renderStageExplainer(stageInfoEl, stage, added);
 }
 
 function advanceStage() {
@@ -187,8 +228,14 @@ function tick(timestampMs) {
         inputLabels: isShark ? sharkInputLabels(stageForInputs.id) : fishInputLabels(stageForInputs.id),
         outputLabels: OUTPUT_LABELS,
       };
-      drawNNDiagram(nnCtx, app.selectedAgent.nn, activations, { width: nnCanvas.width, height: nnCanvas.height }, nnLabels);
+      // The weight diff only applies to the exact genome it was computed
+      // against (fish[0], the surviving elite at episode start) - if the
+      // user has clicked a different agent, don't show a stale diff.
+      const weightDiff = app.selectedAgent === app.weightDiffTarget ? app.weightDiff : null;
+      drawNNDiagram(nnCtx, app.selectedAgent.nn, activations, { width: nnCanvas.width, height: nnCanvas.height }, nnLabels, weightDiff);
     }
+
+    drawFitnessChart(chartCtx, app.fitnessHistory, { width: chartCanvas.width, height: chartCanvas.height });
   }
 
   renderHUD(hudEl, {
@@ -232,4 +279,5 @@ tankCanvas.addEventListener('click', e => {
 
 initGenomes();
 startEpisode();
+updateStageExplainer(null);
 requestAnimationFrame(tick);

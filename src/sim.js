@@ -91,7 +91,23 @@ export function stepEpisode(state, dt, stageId, speedConfig = {}) {
     const { output } = forward(f.nn, inputs);
     const [nnTurn, thrust] = output;
     const wallTurn = wallAvoidanceTurn(f, bounds, WALL_MARGIN);
-    const turn = nnTurn + wallTurn;
+
+    // Baseline flee: from stage 3 onward the fish's inputs include shark
+    // distance/angle, but a partially-evolved NN doesn't reliably act on
+    // that yet, so fish would swim in lazy circles regardless of how far
+    // the shark is. Blend in a direct bearing away from the shark, same
+    // pattern as the shark's own baseline pursuit, so distance-keeping is
+    // visible immediately and gets refined by evolution rather than
+    // invented from nothing.
+    let turn = nnTurn + wallTurn;
+    if (stageId >= 3) {
+      const angleToShark = Math.atan2(shark.y - f.y, shark.x - f.x);
+      let fleeDiff = (angleToShark + Math.PI) - f.angle;
+      fleeDiff = Math.atan2(Math.sin(fleeDiff), Math.cos(fleeDiff));
+      const fleeTurn = Math.max(-1, Math.min(1, fleeDiff));
+      turn = 0.6 * turn + 0.4 * fleeTurn;
+    }
+
     f.angle += turn * TURN_RATE * dt + (Math.random() - 0.5) * FISH_WANDER_NOISE * dt;
     const speed = Math.max(FISH_MIN_THRUST, thrust) * fishSpeed;
     f.vx = Math.cos(f.angle) * speed;

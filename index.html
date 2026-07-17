@@ -8,15 +8,22 @@
     .layout { display: flex; gap: 12px; padding: 12px; }
     #tank { background: linear-gradient(180deg, #0d3b4a, #071e28); border-radius: 8px; }
     #nnviz { background: #0a1a1f; border-radius: 8px; }
-    #hud { display: flex; gap: 16px; padding: 8px 12px; font-size: 13px; }
+    #fitnessChart { background: #0a1a1f; border-radius: 8px; }
+    #hud { display: flex; gap: 16px; padding: 8px 12px; font-size: 13px; flex-wrap: wrap; }
+    #stageInfo { padding: 4px 12px 8px; font-size: 13px; line-height: 1.5; max-width: 700px; }
+    .side { display: flex; flex-direction: column; gap: 12px; }
   </style>
 </head>
 <body>
   <div id="controls"></div>
   <div id="hud"></div>
+  <div id="stageInfo"></div>
   <div class="layout">
     <canvas id="tank" width="1000" height="600"></canvas>
-    <canvas id="nnviz" width="360" height="600"></canvas>
+    <div class="side">
+      <canvas id="nnviz" width="360" height="440"></canvas>
+      <canvas id="fitnessChart" width="360" height="140"></canvas>
+    </div>
   </div>
   <script type="module" src="src/main.js"></script>
 </body>

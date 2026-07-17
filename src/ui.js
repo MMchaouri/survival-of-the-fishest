@@ -20,6 +20,25 @@ export function renderHUD(el, state) {
   }
 }
 
+export function renderStageExplainer(el, stage, newInputLabels) {
+  el.textContent = '';
+
+  const heading = document.createElement('div');
+  heading.style.fontWeight = 'bold';
+  heading.textContent = `Stage ${stage.id}: ${stage.name}`;
+
+  const desc = document.createElement('div');
+  desc.textContent = stage.description;
+
+  el.append(heading, desc);
+
+  if (newInputLabels.length > 0) {
+    const added = document.createElement('div');
+    added.textContent = `New this stage: ${newInputLabels.join(', ')} (fish can now sense this and evolution has something new to act on).`;
+    el.appendChild(added);
+  }
+}
+
 export function attachControls(el, handlers) {
   const controls = document.createElement('div');
   controls.style.display = 'flex';

@@ -87,6 +87,51 @@ test('stepEpisode steers shark toward nearest fish even with a zero-weight NN', 
   assert.ok(newDiff < initialDiff, 'shark heading should turn closer to the nearest fish');
 });
 
+test('stepEpisode steers a fish away from the shark from stage 3 onward, even with a zero-weight NN', () => {
+  const fishNN = createNN([5, 8, 2]); // stage 3 input size
+  fishNN.weights = fishNN.weights.map(layer => layer.map(row => row.map(() => 0)));
+  const fish = createFish(bounds, fishNN);
+  fish.x = 100;
+  fish.y = 100;
+  fish.angle = 0; // facing +x, straight at the shark
+
+  const shark = createShark(bounds, createNN([2, 8, 2]));
+  shark.x = 150;
+  shark.y = 100;
+
+  const state = { fish: [fish], shark, bounds };
+  const angleAwayFromShark = Math.atan2(fish.y - shark.y, fish.x - shark.x);
+  const initialDiff = Math.abs(Math.atan2(Math.sin(angleAwayFromShark - fish.angle), Math.cos(angleAwayFromShark - fish.angle)));
+
+  stepEpisode(state, 0.1, 3);
+
+  const newDiff = Math.abs(Math.atan2(Math.sin(angleAwayFromShark - fish.angle), Math.cos(angleAwayFromShark - fish.angle)));
+  assert.ok(newDiff < initialDiff, 'fish heading should turn away from the shark');
+});
+
+test('stepEpisode does not add a flee bias at stage 1 (no shark awareness yet)', () => {
+  const fishNN = createNN([0, 8, 2]);
+  fishNN.weights = fishNN.weights.map(layer => layer.map(row => row.map(() => 0)));
+  fishNN.biases = fishNN.biases.map(layer => layer.map(() => 0));
+  const fish = createFish(bounds, fishNN);
+  fish.x = 100;
+  fish.y = 100;
+  fish.angle = 0;
+
+  const shark = createShark(bounds, createNN([2, 8, 2]));
+  shark.x = 150;
+  shark.y = 100;
+
+  const state = { fish: [fish], shark, bounds };
+  stepEpisode(state, 0.1, 1);
+
+  // Only the small random wander term should move the heading at stage 1
+  // (no NN signal, no wall bias, no flee bias); a flee bias would swing it
+  // by roughly TURN_RATE * dt ~= 0.15 rad toward directly away from the
+  // shark, far more than wander noise's +/-0.03 rad max at this dt.
+  assert.ok(Math.abs(fish.angle) < 0.05, 'stage 1 should not add a flee-toward-away-from-shark bias');
+});
+
 test('stepEpisode honors custom fishSpeed/sharkSpeed overrides', () => {
   const fish = createFish(bounds, createNN([0, 8, 2]));
   fish.x = 100;

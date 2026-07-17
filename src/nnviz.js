@@ -1,6 +1,6 @@
 // src/nnviz.js
 
-export function drawNNDiagram(ctx, nn, activations, bounds, labels = {}) {
+export function drawNNDiagram(ctx, nn, activations, bounds, labels = {}, weightDiff = null) {
   ctx.clearRect(0, 0, bounds.width, bounds.height);
   const layers = activations.length;
   const layerGap = bounds.width / (layers + 1);
@@ -11,17 +11,38 @@ export function drawNNDiagram(ctx, nn, activations, bounds, labels = {}) {
     return layerActs.map((_, n) => ({ x, y: nodeGap * (n + 1) }));
   });
 
-  ctx.lineWidth = 1;
+  // Edge color/width encode the actual weight (sign + magnitude), so this
+  // shows which connections matter, not just which nodes are firing.
+  // Edges that changed noticeably from the last generation's best genome
+  // (via weightDiff) are highlighted in yellow, since nothing here is
+  // trained by backprop - mutation + selection is the only thing that ever
+  // changes a weight, and this is what that change looks like.
+  const CHANGED_THRESHOLD = 0.05;
   for (let l = 0; l < positions.length - 1; l++) {
-    for (const from of positions[l]) {
-      for (const to of positions[l + 1]) {
-        ctx.strokeStyle = 'rgba(150, 200, 200, 0.15)';
+    positions[l].forEach((from, i) => {
+      positions[l + 1].forEach((to, j) => {
+        const w = nn.weights[l]?.[j]?.[i] ?? 0;
+        const magnitude = Math.min(1, Math.abs(w));
+        const diffVal = weightDiff?.weights?.[l]?.[j]?.[i] ?? 0;
+        const changed = Math.abs(diffVal) > CHANGED_THRESHOLD;
+
+        if (changed) {
+          const changeIntensity = Math.min(1, Math.abs(diffVal));
+          ctx.strokeStyle = `rgba(255, 210, 90, ${0.5 + changeIntensity * 0.5})`;
+          ctx.lineWidth = 1.5 + changeIntensity * 2.5;
+        } else {
+          ctx.strokeStyle = w >= 0
+            ? `rgba(120, 220, 200, ${0.08 + magnitude * 0.5})`
+            : `rgba(220, 120, 120, ${0.08 + magnitude * 0.5})`;
+          ctx.lineWidth = 0.5 + magnitude * 2;
+        }
+
         ctx.beginPath();
         ctx.moveTo(from.x, from.y);
         ctx.lineTo(to.x, to.y);
         ctx.stroke();
-      }
-    }
+      });
+    });
   }
 
   positions.forEach((layerPos, l) => {
@@ -57,5 +78,6 @@ export function drawNNDiagram(ctx, nn, activations, bounds, labels = {}) {
   });
 
   ctx.fillStyle = 'rgba(200, 220, 220, 0.6)';
-  ctx.fillText('green = excite, red = inhibit', 6, bounds.height - 8);
+  ctx.fillText('node: green = excite, red = inhibit', 6, bounds.height - 20);
+  ctx.fillText('link: color/width = weight, yellow = changed since last gen', 6, bounds.height - 8);
 }
